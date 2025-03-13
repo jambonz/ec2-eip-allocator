@@ -1,11 +1,16 @@
 FROM amazon/aws-cli:latest
 
-# Install dependencies
-RUN yum install -y curl jq bash
+ARG DETECTED_TAG=main
 
-# Copy the modified script
-COPY assign-eip.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/assign-eip.sh
+# Install dependencies
+RUN yum install -y curl jq bash git \
+    && git clone https://github.com/jambonz/ec2-eip-allocator.git \
+    && cd ec2-eip-allocator \
+    && git fetch --tags \
+    && echo "Checking out tag: ${DETECTED_TAG}" \
+    && git checkout ${DETECTED_TAG} \
+    && cp assign-eip.sh /usr/local/bin/ \
+    && chmod +x /usr/local/bin/assign-eip.sh
 
 # Set the script as the entrypoint
 ENTRYPOINT ["/usr/local/bin/assign-eip.sh"]
