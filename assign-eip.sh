@@ -18,6 +18,16 @@ aws_get_instance_region() {
     if [ -n "$instance_region" ]; then return 0; else return 1; fi
 }
 
+aws_get_primary_network_interface() {
+    network_interface_id=$(aws ec2 describe-network-interfaces --filters "Name=attachment.instance-id,Values=${instance_id}" "Name=attachment.device-index,Values=0" --region ${instance_region} --query "NetworkInterfaces[0].NetworkInterfaceId" --output text)
+    if [ -n "$network_interface_id" ]; then 
+        echo "Primary network interface: $network_interface_id"
+        return 0
+    else 
+        return 1
+    fi
+}
+
 aws_get_unassigned_eips() {
     echo "Looking for EIPs with tag '$TAG_KEY=$TAG_VALUE'..."
     local describe_addresses_response=$(aws ec2 describe-addresses --region $instance_region --filters "Name=tag:$TAG_KEY,Values=$TAG_VALUE" --query "Addresses[?AssociationId==null].AllocationId" --output text)
@@ -36,8 +46,13 @@ aws_get_details() {
         echo "Instance ID: ${instance_id}"
         if aws_get_instance_region; then
             echo "Instance Region: ${instance_region}"
-            echo "Looking for EIPs with tag key: $TAG_KEY and value: $TAG_VALUE"
-            return 0
+            if aws_get_primary_network_interface; then
+                echo "Looking for EIPs with tag key: $TAG_KEY and value: $TAG_VALUE"
+                return 0
+            else
+                echo "Failed to get primary network interface"
+                return 1
+            fi
         else
             echo "Failed to get Instance Region"
             return 1
@@ -51,13 +66,13 @@ aws_get_details() {
 attempt_to_assign_eip() {
     local result
     local exit_code
-    echo "Attempting to assign EIP $1 to instance $instance_id..."
-    result=$( (aws ec2 associate-address --region $instance_region --instance-id $instance_id --allocation-id $1 --no-allow-reassociation) 2>&1 )
+    echo "Attempting to assign EIP $1 to network interface $network_interface_id..."
+    result=$( (aws ec2 associate-address --region $instance_region --network-interface-id $network_interface_id --allocation-id $1 --no-allow-reassociation) 2>&1 )
     exit_code=$?
     if [ "$exit_code" -ne 0 ]; then
-        echo "Failed to assign Elastic IP [$1] to Instance [$instance_id]. ERROR: $result"
+        echo "Failed to assign Elastic IP [$1] to network interface [$network_interface_id]. ERROR: $result"
     else
-        echo "Successfully assigned EIP $1 to instance $instance_id"
+        echo "Successfully assigned EIP $1 to network interface $network_interface_id"
     fi
     return $exit_code
 }
@@ -102,7 +117,7 @@ main() {
 
 declare instance_id
 declare instance_region
+declare network_interface_id
 declare eips
 
 main "$@"
-
