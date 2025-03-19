@@ -1,16 +1,8 @@
-FROM amazon/aws-cli:latest
+FROM amazon/aws-cli:2.7.7
 
 ARG DETECTED_TAG=main
 
-# Install dependencies
-RUN yum install -y curl jq bash git \
-    && git clone https://github.com/jambonz/ec2-eip-allocator.git \
-    && cd ec2-eip-allocator \
-    && git fetch --tags \
-    && echo "Checking out tag: ${DETECTED_TAG}" \
-    && git checkout ${DETECTED_TAG} \
-    && cp assign-eip.sh /usr/local/bin/ \
-    && chmod +x /usr/local/bin/assign-eip.sh
-
-# Set the script as the entrypoint
-ENTRYPOINT ["/usr/local/bin/assign-eip.sh"]
+RUN  yum install -y curl jq
+COPY docker-entrypoint.sh .
+RUN chmod +x docker-entrypoint.sh
+ENTRYPOINT ["./docker-entrypoint.sh"]
